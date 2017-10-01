@@ -14,10 +14,10 @@ g++ -o server bserver.cpp -lpthread
 #include <string.h>
 #include "common.h"
 
-#define MAXRECORDS 1000000
+#define MAXRECORDS 100
 #define FILENAME "Records.txt"
-#define MAXTRANSACTIONS 1000000
-#define MAX_CLIENTS 200
+#define MAXTRANSACTIONS 10000
+#define MAX_CLIENTS 10
 #define INTEREST 2
 
 
@@ -37,6 +37,7 @@ struct thrd_data
 {
 	int csock;
 	struct acc_record* acc;		//Account Records at Server
+	struct tsn_record* tsn_table;	//Client Transaction
 }thrd_data;
 
 
@@ -81,9 +82,8 @@ void printRecords(struct acc_record *rec)
 	int i;
 	for(i=0;rec[i].id != -1;i++)
 	{
-	      printf("\n%d %s %6.2f",rec[i].id,rec[i].name,rec[i].bal);
+	      printf("%d %s %f\n",rec[i].id,rec[i].name,rec[i].bal);
 	}
-	printf("\n");
 }
 
 
@@ -107,7 +107,7 @@ void perform_tsn(struct acc_record* acc, struct tsn_record tsn, char *msg)
 	msg[0] = '\0';
 	if(index == -1)
 	{
-		sprintf(msg,"\nA/c No:%d, doesn't Exist!!",tsn.id);
+		sprintf(msg,"\nAccount No:%d doesn't Exist!!",tsn.id);
 		//printf("\nAccount doesn't Exist!!\n");
 		return;
 	}
@@ -118,20 +118,20 @@ void perform_tsn(struct acc_record* acc, struct tsn_record tsn, char *msg)
 		if(tsn.amt < acc[index].bal)
 		{
 			acc[index].bal -= tsn.amt;
-			sprintf(msg,"\nA/c No:%d, Withdrawn Amt:%d, New Balance:%6.2f",tsn.id,tsn.amt,acc[index].bal);
-			//printf("\nAccount No: %d, Withdrawn Amt: %d, New Balance:%.62f\n",tsn.id,tsn.amt,acc[index].bal);
+			sprintf(msg,"\nAccount No:%d, Withdrawn Amt:%d, New Balance:%d",tsn.id,tsn.amt,acc[index].bal);
+			//printf("\nAccount No: %d, Withdrawn Amt: %d, New Balance:%d\n",tsn.id,tsn.amt,acc[index].bal);
 		}
 		else
 		{
-			sprintf(msg,"\nA/c No:%d, No Suffient Balance! Requested:%d,Current Balance:%6.2f",tsn.id,tsn.amt,acc[index].bal);
+			sprintf(msg,"\nAccount No:%d, No Suffient Balance! Requested:%d,Current Balance:%d",tsn.id,tsn.amt,acc[index].bal);
 			//printf("\nNo Suffient Balance to Withdraw!!\n");
 		}
 	}
 	if(tsn.ttype == 'd')
 	{	//No Limit On Deposits
 		acc[index].bal += tsn.amt;
-		sprintf(msg,"\nA/c No:%d, Deposit Amt:%d, New Balance:%6.2f",tsn.id,tsn.amt,acc[index].bal);
-		//printf("\nAccount No: %d, Deposit Amt: %d, New Balance:%6.2f\n",tsn.id,tsn.amt,acc[index].bal);
+		sprintf(msg,"\nAccount No:%d, Deposit Amt:%d, New Balance:%d",tsn.id,tsn.amt,acc[index].bal);
+		//printf("\nAccount No: %d, Deposit Amt: %d, New Balance:%d\n",tsn.id,tsn.amt,acc[index].bal);
 	}
 	pthread_mutex_unlock(&lock);
 }
@@ -140,52 +140,71 @@ void perform_tsn(struct acc_record* acc, struct tsn_record tsn, char *msg)
 
 void * perform_cli_tsn(void *arg)
 {
-	struct tsn_record tsn;
 	struct thrd_data *td = (struct thrd_data *)arg;
 	int i = 0;
-	int byte_written,byte_read,slept = 0;
+	int byte_written,slept = 0;
 	char *msg = (char *)malloc(1024 * sizeof(char));
 	/* Thread Operation*/	
 
-	while(1)
+	while(td->tsn_table[i].id != -1)
 	{
-		byte_read = read(td->csock, &tsn, sizeof(struct tsn_record));
-		if(tsn.id == -1)
-		{
-			break;
-		}
-		perform_tsn(td->acc,tsn,msg);
-		printf("%s",msg);
+		//msg[0] = '\0';
+		printf("\nTsn:%d Sleeping for %d",td->tsn_table[i].id,td->tsn_table[i].time_st - slept);
+		sleep(td->tsn_table[i].time_st - slept);
+		slept = td->tsn_table[i].time_st;
+		//printf("\n%d %d %c %d",td->tsn_table[i].time_st,td->tsn_table[i].id,td->tsn_table[i].ttype,td->tsn_table[i].amt);
+		perform_tsn(td->acc,td->tsn_table[i],msg);
+		printf("\nTsn %d Performed",td->tsn_table[i].id);
+		printf("%s %lu\n",msg,strlen(msg));
 		byte_written = write(td->csock, (void *)msg, strlen(msg));
+		//printf("byte_wrriten : %d string len:%lu\n", byte_written,strlen(msg));
+		i++;
 	}
-
-	printf("\n*****Bye*****\n");
+	/*Problem in last transaction communication to client*/
 	strcpy(msg,"bye");
 	byte_written = write(td->csock, (void *)msg, strlen(msg));
 
-	//All Transactions from a Client are performed, so closing the connection.
+	//All Transactions from a Client are performed, so closing the connection and free memory.
 	close(td->csock);
+	free(td->tsn_table);
 	//printRecords(td->acc);
+}
+
+
+
+struct tsn_record * read_from_client(int csock)
+{
+	struct tsn_record tsn;
+	struct tsn_record *tsn_table = (struct tsn_record *)malloc(MAXTRANSACTIONS * sizeof(struct tsn_record));;
+	int byte_read,no_of_tsn = 0;
+     	do 
+	{
+		byte_read = read(csock, &tsn, sizeof(struct tsn_record));
+		if(tsn.id == -1)
+		{
+			//Last Dummy Record
+			tsn_table[no_of_tsn].id = -1;
+			break;
+		}
+		tsn_table[no_of_tsn].id = tsn.id;
+		tsn_table[no_of_tsn].ttype = tsn.ttype;
+		tsn_table[no_of_tsn].amt = tsn.amt;
+		tsn_table[no_of_tsn].time_st = tsn.time_st;
+		//printf("\n%d %d %c %d",tsn.time_st,tsn.id,tsn.ttype,tsn.amt);
+		no_of_tsn++;
+	}while(1);
+	return tsn_table;	
 }
 
 
 void * add_interest(void *arg)
 {
 	struct acc_record* acc = (struct acc_record*)arg;
-	int interest = INTEREST;
+
 	int i;
-	while(1)
+	for(i=0;acc[i].id != -1;i++)
 	{
-		sleep(50);
-		//Acquire Mutex Lock
-		pthread_mutex_lock(&lock);
-		for(i=0;acc[i].id != -1;i++)
-		{
-			acc[i].bal =  acc[i].bal + (float)(interest * acc[i].bal)/100;
-		}
-		printf("\nAdded %d%% Interest to each acount",interest);
-		printRecords(acc);
-		pthread_mutex_unlock(&lock);
+		acc[i].bal =  acc[i].bal + (float)(INTEREST * acc[i].bal)/100
 	}
 }
 
@@ -193,16 +212,16 @@ int main(int argc,char *argv[])
 {
 	struct acc_record* acc;
 	struct thrd_data td[MAX_CLIENTS];
+	struct tsn_record *tsn_table;
 	char filename[80];
-	char msg[50];
+
 	int lsock,csock[MAX_CLIENTS];
 	socklen_t clilen;
 	struct sockaddr_in server_addr,cli_addr;
 	int port,i,no_of_clients,byte_written;
 
 	pthread_t thrd[MAX_CLIENTS];
-	pthread_t interest_thrd;
-	setbuf(stdout,NULL);
+
 	strcpy(filename,argv[1]);
 	acc = readServerFile(filename);
 
@@ -211,12 +230,7 @@ int main(int argc,char *argv[])
 		printf("\nUnable to open Server file");
 		return -1;
 	}
-
 	//printRecords(acc);
-
-	//Create Interest Thread
-	pthread_create(&interest_thrd,NULL,add_interest,(void*)acc);
-
 	if((lsock = socket(AF_INET,SOCK_STREAM,0)) == -1)
 	{
 		printf("\nUnable to get server socket");
@@ -240,21 +254,26 @@ int main(int argc,char *argv[])
 	do
 	{
 	
-	//Accept Connections from Client
+		//Accept Connections from Client
 		csock[no_of_clients] = accept(lsock,(struct sockaddr *)&cli_addr,&clilen);
 		if (csock[no_of_clients] < 0) 
         	{
 			printf("\nClient accept request denied!!");
 			continue;
 		}
-		strcpy(msg,"Connection Accepted");
-		byte_written = write(csock[no_of_clients], (void *)msg, strlen(msg) + 1);
-		//Prepare thread data and create New Thread
-		td[no_of_clients].acc = acc;
+		byte_written = write(csock[no_of_clients], (void *)"\nConnection Accepted", 21);
+		tsn_table = read_from_client(csock[no_of_clients]);
+		td[no_of_clients].acc = acc;		/*Prepare thread data*/
 		td[no_of_clients].csock = csock[no_of_clients];
+		td[no_of_clients].tsn_table = tsn_table;
 		pthread_create(&thrd[no_of_clients],NULL,perform_cli_tsn,(void*)&td[no_of_clients]);
 		no_of_clients++;
 	}while(1);
+
+	for(i = 0;i<no_of_clients;i++)
+	{
+		pthread_join(thrd[i],NULL);
+	}
 
 	close(lsock);
 

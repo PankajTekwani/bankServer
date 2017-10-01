@@ -1,8 +1,8 @@
 /*
 g++ -o client bclient_basic.cpp
-./client Transactions.txt 12340
+./client Transactions.txt localhost 12340
 */
-#include <iostream>
+
 #include <fstream>
 #include <string.h>
 #include <stdlib.h>
@@ -13,19 +13,11 @@ g++ -o client bclient_basic.cpp
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include "common.h"
 
-using namespace std;
 
-#define MAXRECORDS 10000
+#define MAXRECORDS 1000000
 #define SERVER_ADDR "localhost"
-
-struct tsn_record
-{
-	int id;
-	int time_st;
-	char ttype;
-	int amt;
-}tsn_record;
 
 struct tsn_record * getRecords(char file[], int *totalTransactions)
 {
@@ -55,7 +47,7 @@ struct tsn_record * getRecords(char file[], int *totalTransactions)
 	}
 	//Dummy Record
 	rec[i].id = -1;
-	rec[i].time_st = -1;
+	rec[i].time_st = 0;
 	rec[i].ttype = 'w';
 	rec[i].amt = 0;
 	*totalTransactions = i;
@@ -69,7 +61,7 @@ void printRecords(struct tsn_record *rec)
 	int i;
 	for ( i=0;rec[i].id != -1;i++ )
 	{
-	      cout<<rec[i].time_st <<" "<<rec[i].id<<" "<<rec[i].ttype<<" "<<rec[i].amt<< endl;
+		printf("\n%d %d %c %d",rec[i].time_st,rec[i].id,rec[i].ttype,rec[i].amt);
 	}
 }
 
@@ -85,7 +77,7 @@ void printRecvMsg(char *msg, int len)
 }
 
 int stringcmp(const char *f,const char *s)
-{
+{//Unable to work
 	int i,len;
 	len = strlen(f);
 	if(len !=strlen(s))
@@ -104,14 +96,15 @@ int main(int argc,char *argv[])
 	
 	struct tsn_record* tsn;
 	char filename[80];
-
+	int slept = 0;
 	int cli_sock;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	void *msg;
 	int port, totalTsn;
 	int i,byte_read,byte_write = -1;
-
+	
+	setbuf(stdout,NULL);
 	strcpy(filename,argv[1]);
 	
 	tsn = getRecords(filename,&totalTsn);
@@ -132,8 +125,8 @@ int main(int argc,char *argv[])
 	}
 
 	//Prepare Server Structure to Connect
-	server = gethostbyname(SERVER_ADDR);
-	port = atoi(argv[2]);
+	server = gethostbyname(argv[2]);
+	port = atoi(argv[3]);
 	memset(&serv_addr,'0',sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port);
@@ -151,27 +144,31 @@ int main(int argc,char *argv[])
 	byte_read = read(cli_sock,msg,21);
 	printRecvMsg((char *)msg,byte_read);
 
+	//printf("Total Transn: %d",totalTsn);
 	//Send Transactions
 	for(i = 0;i <= totalTsn; i++)
 	{
 		//printf("%d %d %c %d\n",tsn[i].time_st,tsn[i].id,tsn[i].ttype,tsn[i].amt);
+		if((tsn[i].time_st - slept) > 0)
+			{
+				sleep(tsn[i].time_st - slept);
+				slept = tsn[i].time_st;
+			}
 		byte_write = write(cli_sock, (void *)&tsn[i], sizeof(struct tsn_record));
-	}
-
-	do
-	{
 		byte_read = read(cli_sock,msg,1024);
+
 		if(byte_read > 0)
 		{
-			fflush(stdout);
-			printRecvMsg((char *)msg,byte_read);
 			if((stringcmp((char *)msg,"bye")))
 			{
+				printf("\n****Bye****\n");
 				close(cli_sock);
 				break;
 			}
+			printRecvMsg((char *)msg,byte_read);
 		}
-	}while(1);
+	}
+
 	free(msg);
 	return 0;
 }
