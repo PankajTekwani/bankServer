@@ -13,22 +13,16 @@ g++ -o client bclient_basic.cpp
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-<<<<<<< HEAD:src/bclient.cpp
 #include <time.h>
-=======
->>>>>>> bd8528b1b346c2d9e9212319f74dc45bd692648b:bclient_basic.cpp
 #include "common.h"
 
 
 #define MAXRECORDS 1000000
 #define SERVER_ADDR "localhost"
 
-<<<<<<< HEAD:src/bclient.cpp
 /*
 This function reads the transaction file and prepares the array of structures to pass it to the server in order to perform transactions
 */
-=======
->>>>>>> bd8528b1b346c2d9e9212319f74dc45bd692648b:bclient_basic.cpp
 struct tsn_record * getRecords(char file[], int *totalTransactions)
 {
 	FILE *client;
@@ -74,11 +68,7 @@ void printRecords(struct tsn_record *rec)
 	int i;
 	for ( i=0;rec[i].id != -1;i++ )
 	{
-<<<<<<< HEAD:src/bclient.cpp
 		printf("\n%d %d %c %ld",rec[i].time_st,rec[i].id,rec[i].ttype,rec[i].amt);
-=======
-		printf("\n%d %d %c %d",rec[i].time_st,rec[i].id,rec[i].ttype,rec[i].amt);
->>>>>>> bd8528b1b346c2d9e9212319f74dc45bd692648b:bclient_basic.cpp
 	}
 }
 
@@ -126,13 +116,9 @@ int main(int argc,char *argv[])
 	void *msg;
 	int port, totalTsn;
 	int i,byte_read,byte_write = -1;
-<<<<<<< HEAD:src/bclient.cpp
 	clock_t begin, end;
 	double time_spent,ttime;
 
-=======
-	
->>>>>>> bd8528b1b346c2d9e9212319f74dc45bd692648b:bclient_basic.cpp
 	setbuf(stdout,NULL);
 	strcpy(filename,argv[1]);
 	
@@ -173,7 +159,6 @@ int main(int argc,char *argv[])
 	byte_read = read(cli_sock,msg,21);
 	printf("\n%s",(char *)msg);
 
-<<<<<<< HEAD:src/bclient.cpp
 	ttime = 0;
 	//Send Transactions to SERVER
 	for(i = 0;i <= totalTsn; i++)
@@ -197,33 +182,6 @@ int main(int argc,char *argv[])
 		}
 	}
 	printf("\n\nTotal Time for All Transactions: [%lf] secs\n",(ttime));
-=======
-	//printf("Total Transn: %d",totalTsn);
-	//Send Transactions
-	for(i = 0;i <= totalTsn; i++)
-	{
-		//printf("%d %d %c %d\n",tsn[i].time_st,tsn[i].id,tsn[i].ttype,tsn[i].amt);
-		if((tsn[i].time_st - slept) > 0)
-			{
-				sleep(tsn[i].time_st - slept);
-				slept = tsn[i].time_st;
-			}
-		byte_write = write(cli_sock, (void *)&tsn[i], sizeof(struct tsn_record));
-		byte_read = read(cli_sock,msg,1024);
-
-		if(byte_read > 0)
-		{
-			if((stringcmp((char *)msg,"bye")))
-			{
-				printf("\n****Bye****\n");
-				close(cli_sock);
-				break;
-			}
-			printRecvMsg((char *)msg,byte_read);
-		}
-	}
-
->>>>>>> bd8528b1b346c2d9e9212319f74dc45bd692648b:bclient_basic.cpp
 	free(msg);
 	close(cli_sock);
 	return 0;
