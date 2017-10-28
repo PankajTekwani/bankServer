@@ -12,6 +12,7 @@ g++ -o server bserver.cpp -lpthread
 #include <netinet/in.h>
 #include <pthread.h>
 #include <string.h>
+#include <time.h>
 #include "common.h"
 
 #define MAXRECORDS 1000000
@@ -21,14 +22,15 @@ g++ -o server bserver.cpp -lpthread
 #define INTEREST 2
 
 
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+//static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 //Server Account Records
 struct acc_record
 {
 	int id;
-	char name[50];
+	char name[200];
 	float bal;
+	pthread_mutex_t lock;
 }acc_record;
 
 
@@ -36,15 +38,15 @@ struct acc_record
 struct thrd_data
 {
 	int csock;
-	struct acc_record* acc;		//Account Records at Server
+	struct acc_record* acc;		//<---Account Records at Server
 }thrd_data;
 
 
-// Function to read Records.txt File
+// Function to read Records.txt File and prepare the A/C records data structure
 struct acc_record* readServerFile(char file[])
 {
 	FILE *record;
-	char name[50];
+	char name[200];
 	float bal;
 	int id,i;
 
@@ -63,6 +65,8 @@ struct acc_record* readServerFile(char file[])
 		rec[i].id = id;
 		strcpy(rec[i].name, name);
 		rec[i].bal = bal;
+		pthread_mutex_init(&rec[i].lock,NULL);
+		//rec[i].lock = PTHREAD_MUTEX_INITIALIZER;
 		i++;
 	}
 	//Dummy Record
@@ -75,7 +79,7 @@ struct acc_record* readServerFile(char file[])
 }
 
 
-
+//Function to print all the A/C records.
 void printRecords(struct acc_record *rec)
 {
 	int i;
@@ -87,7 +91,7 @@ void printRecords(struct acc_record *rec)
 }
 
 
-
+//Function to get the index of the customer account in A/C table using its id.
 int getRecord(struct acc_record* acc, int id)
 {
 	int i;
@@ -99,7 +103,9 @@ int getRecord(struct acc_record* acc, int id)
 	return -1;
 }
 
-
+/*
+Function to perform one transaction of the particular Client. Passing A/C records (acc), Transaction (tsn) to be performed ans the Char * (msg) to retrieve the details of the transaction performed.
+*/
 void perform_tsn(struct acc_record* acc, struct tsn_record tsn, char *msg)
 {
 	
@@ -107,37 +113,39 @@ void perform_tsn(struct acc_record* acc, struct tsn_record tsn, char *msg)
 	msg[0] = '\0';
 	if(index == -1)
 	{
-		sprintf(msg,"\nA/c No:%d, doesn't Exist!!",tsn.id);
+		sprintf(msg,"A/c No:%4d, doesn't Exist!!",tsn.id);
 		//printf("\nAccount doesn't Exist!!\n");
 		return;
 	}
 
-	pthread_mutex_lock(&lock);
+	pthread_mutex_lock(&acc[index].lock);
 	if(tsn.ttype == 'w')
 	{
-		if(tsn.amt < acc[index].bal)
+		if(tsn.amt <= acc[index].bal)
 		{
 			acc[index].bal -= tsn.amt;
-			sprintf(msg,"\nA/c No:%d, Withdrawn Amt:%d, New Balance:%6.2f",tsn.id,tsn.amt,acc[index].bal);
-			//printf("\nAccount No: %d, Withdrawn Amt: %d, New Balance:%.62f\n",tsn.id,tsn.amt,acc[index].bal);
+			sprintf(msg,"A/c No:%4d, Wthdrwn Amt:%4ld, New Bal:%5.2f",tsn.id,tsn.amt,acc[index].bal);
+			//printf("\nAccount No: %d, Withdrawn Amt: %ld, New Balance:%.62f\n",tsn.id,tsn.amt,acc[index].bal);
 		}
 		else
 		{
-			sprintf(msg,"\nA/c No:%d, No Suffient Balance! Requested:%d,Current Balance:%6.2f",tsn.id,tsn.amt,acc[index].bal);
+			sprintf(msg,"A/c No:%4d, No Suffient Bal! Rqstd:%4ld,Curr Bal:%5.2f",tsn.id,tsn.amt,acc[index].bal);
 			//printf("\nNo Suffient Balance to Withdraw!!\n");
 		}
 	}
 	if(tsn.ttype == 'd')
 	{	//No Limit On Deposits
 		acc[index].bal += tsn.amt;
-		sprintf(msg,"\nA/c No:%d, Deposit Amt:%d, New Balance:%6.2f",tsn.id,tsn.amt,acc[index].bal);
-		//printf("\nAccount No: %d, Deposit Amt: %d, New Balance:%6.2f\n",tsn.id,tsn.amt,acc[index].bal);
+		sprintf(msg,"A/c No:%4d, Dpst Amt:%4ld, New Bal:%5.2f",tsn.id,tsn.amt,acc[index].bal);
+		//printf("\nAccount No: %d, Deposit Amt: %ld, New Balance:%6.2f\n",tsn.id,tsn.amt,acc[index].bal);
 	}
-	pthread_mutex_unlock(&lock);
+	pthread_mutex_unlock(&acc[index].lock);
 }
 
 
-
+/*
+Function to perform all transaction of single client. After accepting the connection from each client the Server creates a thread for the clien connection and assigns this function to it to perform all transaction of that client. 
+*/
 void * perform_cli_tsn(void *arg)
 {
 	struct tsn_record tsn;
@@ -155,20 +163,22 @@ void * perform_cli_tsn(void *arg)
 			break;
 		}
 		perform_tsn(td->acc,tsn,msg);
-		printf("%s",msg);
+		printf("\n%s",msg);
 		byte_written = write(td->csock, (void *)msg, strlen(msg));
 	}
 
 	printf("\n*****Bye*****\n");
-	strcpy(msg,"bye");
-	byte_written = write(td->csock, (void *)msg, strlen(msg));
+	//strcpy(msg,"bye\n");
+	//byte_written = write(td->csock, (void *)msg, strlen(msg));
 
 	//All Transactions from a Client are performed, so closing the connection.
 	close(td->csock);
 	//printRecords(td->acc);
 }
 
-
+/*
+Function to add interest to all the accounts after a certain interval. When the server starts it creates the Insterest thread after preparing its account table. So, this function runs parallely in the infinite loop and add interest to allo the account after a fixed interval. This fuction has used locks to prevent any race condition.
+*/
 void * add_interest(void *arg)
 {
 	struct acc_record* acc = (struct acc_record*)arg;
@@ -177,18 +187,22 @@ void * add_interest(void *arg)
 	while(1)
 	{
 		sleep(50);
-		//Acquire Mutex Lock
-		pthread_mutex_lock(&lock);
+
 		for(i=0;acc[i].id != -1;i++)
 		{
+			//Acquire Mutex Lock
+			pthread_mutex_lock(&acc[i].lock);
 			acc[i].bal =  acc[i].bal + (float)(interest * acc[i].bal)/100;
+			pthread_mutex_unlock(&acc[i].lock);
 		}
-		printf("\nAdded %d%% Interest to each acount",interest);
+		printf("\n\nAdded %d%% Interest to each acount",interest);
 		printRecords(acc);
-		pthread_mutex_unlock(&lock);
 	}
 }
 
+/*
+Main fuction to start the Server.
+*/
 int main(int argc,char *argv[])
 {
 	struct acc_record* acc;
@@ -200,7 +214,7 @@ int main(int argc,char *argv[])
 	struct sockaddr_in server_addr,cli_addr;
 	int port,i,no_of_clients,byte_written;
 
-	pthread_t thrd[MAX_CLIENTS];
+	pthread_t thrd;
 	pthread_t interest_thrd;
 	setbuf(stdout,NULL);
 	strcpy(filename,argv[1]);
@@ -252,8 +266,8 @@ int main(int argc,char *argv[])
 		//Prepare thread data and create New Thread
 		td[no_of_clients].acc = acc;
 		td[no_of_clients].csock = csock[no_of_clients];
-		pthread_create(&thrd[no_of_clients],NULL,perform_cli_tsn,(void*)&td[no_of_clients]);
-		no_of_clients++;
+		pthread_create(&thrd,NULL,perform_cli_tsn,(void*)&td[no_of_clients]);
+		no_of_clients = (no_of_clients + 1)%200 ;
 	}while(1);
 
 	close(lsock);

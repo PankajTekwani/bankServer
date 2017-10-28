@@ -13,18 +13,22 @@ g++ -o client bclient_basic.cpp
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include "common.h"
 
 
 #define MAXRECORDS 1000000
 #define SERVER_ADDR "localhost"
 
+/*
+This function reads the transaction file and prepares the array of structures to pass it to the server in order to perform transactions
+*/
 struct tsn_record * getRecords(char file[], int *totalTransactions)
 {
 	FILE *client;
 	char type;
-	int amt,id,ts,i;
-
+	int id,ts,i;
+	long amt;
 	struct tsn_record *rec = (struct tsn_record *)malloc(MAXRECORDS * sizeof(struct tsn_record));
 
 	client = fopen(file,"r");
@@ -37,7 +41,7 @@ struct tsn_record * getRecords(char file[], int *totalTransactions)
 	i=0;
 	while ( !feof(client) )
 	{
-		fscanf(client,"%d %d %c %d\n",&ts,&id,&type,&amt);
+		fscanf(client,"%d %d %c %ld\n",&ts,&id,&type,&amt);
 		rec[i].id = id;
 		rec[i].time_st = ts;
 		rec[i].ttype = type;
@@ -56,25 +60,32 @@ struct tsn_record * getRecords(char file[], int *totalTransactions)
 	return rec;
 }
 
+/*
+This function prints the records which the client read from the transaction file
+*/
 void printRecords(struct tsn_record *rec)
 {
 	int i;
 	for ( i=0;rec[i].id != -1;i++ )
 	{
-		printf("\n%d %d %c %d",rec[i].time_st,rec[i].id,rec[i].ttype,rec[i].amt);
+		printf("\n%d %d %c %ld",rec[i].time_st,rec[i].id,rec[i].ttype,rec[i].amt);
 	}
 }
 
-
-void printRecvMsg(char *msg, int len)
+/*
+It prints the message recieved from the server on the client terminal
+*/
+void printRecvMsg(char *msg, int len, double time)
 {
 	int i;
 	if(len == 0)
 		return;
+	printf("\n[%lf]secs\t",time);
 	for(i=0;i<len;i++)
 		printf("%c",msg[i]);
 	//printf("\n");
 }
+
 
 int stringcmp(const char *f,const char *s)
 {//Unable to work
@@ -89,7 +100,9 @@ int stringcmp(const char *f,const char *s)
 	}
 	return 1;
 }
-
+/*
+Main function to start a client
+*/
 int main(int argc,char *argv[])
 {
 	
@@ -103,7 +116,9 @@ int main(int argc,char *argv[])
 	void *msg;
 	int port, totalTsn;
 	int i,byte_read,byte_write = -1;
-	
+	clock_t begin, end;
+	double time_spent,ttime;
+
 	setbuf(stdout,NULL);
 	strcpy(filename,argv[1]);
 	
@@ -142,33 +157,32 @@ int main(int argc,char *argv[])
 
 	msg = malloc(1024 * sizeof(char));
 	byte_read = read(cli_sock,msg,21);
-	printRecvMsg((char *)msg,byte_read);
+	printf("\n%s",(char *)msg);
 
-	//printf("Total Transn: %d",totalTsn);
-	//Send Transactions
+	ttime = 0;
+	//Send Transactions to SERVER
 	for(i = 0;i <= totalTsn; i++)
 	{
-		//printf("%d %d %c %d\n",tsn[i].time_st,tsn[i].id,tsn[i].ttype,tsn[i].amt);
+		//printf("%d %d %c %ld\n",tsn[i].time_st,tsn[i].id,tsn[i].ttype,tsn[i].amt);
+		//SLEEP till the specified Time Stamp
 		if((tsn[i].time_st - slept) > 0)
 			{
-				sleep(tsn[i].time_st - slept);
+				usleep((tsn[i].time_st - slept)*1000);
 				slept = tsn[i].time_st;
 			}
+		begin = clock();
 		byte_write = write(cli_sock, (void *)&tsn[i], sizeof(struct tsn_record));
 		byte_read = read(cli_sock,msg,1024);
-
+		end = clock();
 		if(byte_read > 0)
 		{
-			if((stringcmp((char *)msg,"bye")))
-			{
-				printf("\n****Bye****\n");
-				close(cli_sock);
-				break;
-			}
-			printRecvMsg((char *)msg,byte_read);
+			time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+			printRecvMsg((char *)msg,byte_read,time_spent);
+			ttime += time_spent;
 		}
 	}
-
+	printf("\n\nTotal Time for All Transactions: [%lf] secs\n",(ttime));
 	free(msg);
+	close(cli_sock);
 	return 0;
 }

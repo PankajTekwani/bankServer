@@ -1,0 +1,29 @@
+
+Connection Accepted
+[0.000021]secs	A/c No:  37, Dpst Amt:  50, New Bal:538.00
+[0.000010]secs	A/c No:  17, Wthdrwn Amt:  61, New Bal:468491.00
+[0.000011]secs	A/c No:  84, Wthdrwn Amt:  98, New Bal:1130.00
+[0.000010]secs	A/c No:  37, Dpst Amt:  49, New Bal:1339.00
+[0.000011]secs	A/c No:  84, Wthdrwn Amt:  48, New Bal:377.00
+[0.000008]secs	A/c No:  37, Wthdrwn Amt:  77, New Bal:574.00
+[0.000009]secs	A/c No:  84, Dpst Amt:  95, New Bal:443.00
+[0.000010]secs	A/c No:  17, Dpst Amt:  78, New Bal:470162.00
+[0.000011]secs	A/c No:  17, Wthdrwn Amt:  81, New Bal:471148.00
+[0.000010]secs	A/c No:  84, Wthdrwn Amt:  70, New Bal:520.00
+[0.000010]secs	A/c No:  42, Wthdrwn Amt:  70, New Bal:92917.00
+[0.000010]secs	A/c No:  84, Wthdrwn Amt:  43, New Bal:309.00
+[0.000009]secs	A/c No:  37, No Suffient Bal! Rqstd:  79,Curr Bal:10.00
+[0.000008]secs	A/c No:  84, Dpst Amt:  99, New Bal:554.00
+[0.000011]secs	A/c No:  17, Dpst Amt:  74, New Bal:471245.00
+[0.000007]secs	A/c No:  37, Dpst Amt:  59, New Bal:157.00
+[0.000008]secs	A/c No:  17, Wthdrwn Amt:  63, New Bal:471535.00
+[0.000015]secs	A/c No:  84, Dpst Amt:  96, New Bal:1417.00
+[0.000021]secs	A/c No:  37, Dpst Amt:  44, New Bal:552.00
+[0.000009]secs	A/c No:  84, Dpst Amt:  43, New Bal:1503.00
+[0.000008]secs	A/c No:  37, Wthdrwn Amt:  79, New Bal:788.00
+[0.000006]secs	A/c No:  84, Wthdrwn Amt:  99, New Bal:1555.00
+[0.000007]secs	A/c No:  17, Dpst Amt:  74, New Bal:472638.00
+[0.000009]secs	A/c No:  42, Dpst Amt:  89, New Bal:93284.00
+[0.000008]secs	A/c No:  17, Dpst Amt:  74, New Bal:474069.00
+
+Total Time for All Transactions: [0.000257] secs
